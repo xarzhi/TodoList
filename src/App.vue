@@ -1,41 +1,62 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { readTextFile, BaseDirectory } from '@tauri-apps/api/fs'
+import { readTextFile, BaseDirectory, writeFile } from '@tauri-apps/api/fs'
+import { mdTableToArr, arrToMdTable } from './utils/utils'
 const content = ref('')
 const dataSource = ref([])
 
 onMounted(() => {
-	read()
+	loadData()
 })
-
+const loadData = async () => {
+	let filePath = 'App/data.md'
+	const promise = readTextFile(filePath, {
+		dir: BaseDirectory.Resource,
+	})
+	promise
+		.then(response => {
+			const data = mdTableToArr(response).map(item => ({
+				...item,
+				disabled: Boolean(item.disabled),
+				isCheck: item.isCheck === 'true' ? true : false,
+			}))
+			dataSource.value = data
+		})
+		.catch(error => {
+			console.error(error)
+		})
+}
 const handleAdd = () => {
 	if (!content.value) {
 		ElMessage({
 			message: '没数据你加个der啊',
 			type: 'warning',
 			plain: true,
-			duration: 500,
+			duration: 1000,
 		})
 		return
 	}
-	dataSource.push({
-		id: dataSource.length + 1,
+	dataSource.value.push({
+		id: dataSource.value.length + 1,
 		value: content.value,
 		disabled: true,
 		isCheck: false,
 	})
 	content.value = ''
+	reWriteFile()
 }
 const handleDelete = index => {
-	dataSource.splice(index, 1)
+	dataSource.value.splice(index, 1)
+	reWriteFile()
 }
 const handleChange = index => {
-	dataSource[index].disabled = false
+	dataSource.value[index].disabled = false
 }
 const changeOk = (e, index) => {
-	dataSource[index].value = e.target.value
-	dataSource[index].disabled = true
+	dataSource.value[index].value = e.target.value
+	dataSource.value[index].disabled = true
+	reWriteFile()
 	ElMessage({
 		message: '修改成功',
 		type: 'success',
@@ -44,53 +65,25 @@ const changeOk = (e, index) => {
 	})
 }
 const handleCheck = (val, index) => {
-	dataSource[index].isCheck = val
+	dataSource.value[index].isCheck = val
+	reWriteFile()
+	const message = val ? '完成喽' : '还得加油啊！'
+	ElMessage({
+		message,
+		type: 'success',
+		plain: true,
+		duration: 1000,
+	})
 }
-const readMd = markdownTable => {
-	const lines = markdownTable.trim().split('\n')
-	const headerLine = lines.shift() // 移除并存储表头行
-	const headerColumns = headerLine
-		.split('|')
-		.map(h => h.trim())
-		.filter(Boolean) // 分割并去除空白
 
-	// 构建数据对象并过滤掉全为'----'的行
-	const dataObjects = lines
-		.map(line => {
-			const columns = line
-				.split('|')
-				.map(c => c.trim())
-				.filter(Boolean) // 分割当前行并去除空白
-			const rowObject = headerColumns.reduce((obj, key, index) => {
-				obj[key] = columns[index] // 根据表头分配值
-				return obj
-			}, {})
-
-			// 检查是否所有值都是'----'，如果是则过滤掉
-			return Object.values(rowObject).every(value => value.includes('-')) ? null : rowObject
-		})
-		.filter(Boolean) // 过滤掉null值
-
-	return dataObjects
-}
-const read = async () => {
+const reWriteFile = async () => {
 	let filePath = 'App/data.md'
-	const promise = readTextFile(filePath, {
+	const content = arrToMdTable(dataSource.value)
+	await writeFile(filePath, content, {
 		dir: BaseDirectory.Resource,
 	})
-	promise
-		.then(response => {
-			const data = readMd(response).map(item => ({
-				...item,
-				disabled: Boolean(item.isCheck),
-				isCheck: Boolean(item.isCheck),
-			}))
-
-			dataSource.value = data
-		})
-		.catch(error => {
-			console.error(error)
-		})
+	console.log(content)
+	loadData()
 }
 </script>
 
@@ -100,13 +93,13 @@ const read = async () => {
 			<div class="head">
 				<el-input type="text" v-model.trim="content" />
 				<el-button type="primary" @click="handleAdd">添加</el-button>
-				<el-button type="primary" @click="read">读取</el-button>
+				<el-button type="primary" @click.enter="reWriteFile">读取</el-button>
 			</div>
 			<div class="body">
 				<el-empty :image-size="150" v-if="!dataSource.length" />
 				<ul v-else>
 					<li v-for="(item, index) in dataSource" :key="item.id" class="item">
-						<el-checkbox :value="item.isCheck" @change="handleCheck($event, index)" />
+						<el-checkbox v-model="item.isCheck" @change="handleCheck($event, index)" />
 						<el-input
 							v-model="item.value"
 							:disabled="item.disabled"

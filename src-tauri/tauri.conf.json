@@ -6,7 +6,7 @@
 		"distDir": "../dist"
 	},
 	"package": {
-		"productName": "Circle",
+		"productName": "TodoList",
 		"version": "0.0.0"
 	},
 	"tauri": {
@@ -49,7 +49,7 @@
 		},
 		"windows": [
 			{
-				"title": "Todo List",
+				"title": "TodoList",
 				"width": 800,
 				"height": 600,
 				"label": "customization"
